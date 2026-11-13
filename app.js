@@ -1,4 +1,6 @@
-/* Agenda & Diario — app locale: tutti i dati restano in questo dispositivo (IndexedDB). */
+/* Agenda & Diario.
+   Aperta da Claude salva i dati nell'account di chi la usa (privati, uguali su ogni dispositivo);
+   aperta come semplice sito li salva nel browser (IndexedDB). */
 (() => {
   'use strict';
 
@@ -35,9 +37,13 @@
 
   let toastTimer;
   function toast(msg) {
-    const t = $('#toast');
-    t.textContent = msg; t.classList.add('show');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+    // Dentro la finestra aperta più in alto, altrimenti resterebbe nascosto dietro.
+    const t = $('#toast') || Object.assign(document.createElement('div'), { id: 'toast', className: 'toast' });
+    t.setAttribute('role', 'status');
+    const host = [...document.querySelectorAll('dialog[open]')].pop() || document.body;
+    if (t.parentNode !== host) host.append(t);
+    t.textContent = msg; void t.offsetWidth; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
   }
 
   // ---------- Database ----------
@@ -65,6 +71,101 @@
   const dbPut = (store, obj) => tx([store], 'readwrite', (t) => { t.objectStore(store).put(obj); });
   const dbDel = (store, id) => tx([store], 'readwrite', (t) => { t.objectStore(store).delete(id); });
 
+  // ---------- Archivio: nel browser oppure nell'account Claude ----------
+  class UserError extends Error {}
+  const safeId = (id) => String(id).replace(/[^A-Za-z0-9_\-.~:@+]/g, '_');
+  const MAX_FILE = 20 * 1024 * 1024;
+  const EXT_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', webm: 'video/webm', pdf: 'application/pdf',
+    csv: 'text/csv', md: 'text/markdown', json: 'application/json', txt: 'text/plain' };
+  const extOf = (name) => (/\.([a-z0-9]+)$/i.exec(name || '')?.[1] || '').toLowerCase();
+  const cloudType = (f) => EXT_TYPES[extOf(f.name)] || (Object.values(EXT_TYPES).includes(f.type) ? f.type : f.type === 'video/quicktime' ? 'video/mp4' : '');
+
+  const local = {
+    cloud: false,
+    async init() { for (const s of STORES) data[s] = await dbAll(s); },
+    put: dbPut,
+    del: dbDel,
+    check: () => null,
+    async putAtt(rec, blob) { return { ...rec, blob }; },
+    async delAtt() {},
+    clearAll: () => tx(STORES, 'readwrite', (t) => STORES.forEach((s) => t.objectStore(s).clear())),
+  };
+
+  const cloud = {
+    cloud: true, base: null, assets: null, downloads: null,
+    col(s) { return this.base.collection(s); },
+    async init(onChange) {
+      const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+      const uid = db && user ? await user.id() : null;
+      if (!uid) return false;
+      this.base = db.doc(`data/users/${uid}/agenda`);
+      window.claude.use('assets').then((a) => { this.assets = a; });
+      window.claude.use('downloads').then((d) => { this.downloads = d; });
+      await new Promise((res, rej) => {
+        const pending = new Set(STORES);
+        STORES.forEach((s) => this.col(s).onSnapshot((snap) => {
+          data[s] = snap.docs.map((d) => d.data());
+          if (pending.delete(s) && !pending.size) res(); else if (!pending.size) onChange();
+        }, rej));
+      });
+      return true;
+    },
+    put(s, obj) { return this.col(s).doc(safeId(obj.id)).set(obj); },
+    del(s, id) { return this.col(s).doc(safeId(id)).delete(); },
+    // Controllo fatto subito, quando si sceglie il file.
+    check(f) {
+      const isImg = (f.type || '').startsWith('image/') || /^image\//.test(EXT_TYPES[extOf(f.name)] || '');
+      if (!isImg && !cloudType(f)) return `“${f.name}”: questo tipo di file non si può allegare. Vanno bene foto, video, PDF e file di testo.`;
+      if (!isImg && f.size > MAX_FILE) return `“${f.name}” supera i 20 MB: prova con un video più breve.`;
+      return null;
+    },
+    async putAtt(rec, blob) {
+      if (!this.assets) throw new UserError('Gli allegati non sono disponibili in questo momento. Riprova tra poco.');
+      let type = cloudType({ name: rec.name, type: blob.type }), name = rec.name;
+      const isImg = (blob.type || '').startsWith('image/') || type.startsWith('image/');
+      if (isImg && type !== 'image/svg+xml' && type !== 'image/gif' && (!type || blob.size > 2.5 * 1024 * 1024)) {
+        const small = await shrinkImage(blob).catch(() => null);
+        if (small) { blob = small; type = 'image/jpeg'; name = name.replace(/\.[a-z0-9]+$/i, '') + '.jpg'; }
+      }
+      if (!type) throw new UserError(`“${rec.name}”: formato non supportato.`);
+      if (blob.size > MAX_FILE) throw new UserError(`“${rec.name}” supera i 20 MB.`);
+      let r;
+      try { r = await this.assets.upload(blob, { type }); } catch (e) {
+        const msg = { too_large: 'supera i 20 MB', unsupported_type: 'ha un formato non supportato', quota_or_state: 'non entra: lo spazio per gli allegati è esaurito' }[e?.code];
+        throw new UserError(msg ? `“${rec.name}” ${msg}.` : `Non sono riuscita a caricare “${rec.name}”. Riprova.`);
+      }
+      return { ...rec, name, type: r.contentType, size: r.sizeBytes, assetId: r.id };
+    },
+    async delAtt(att) { if (att.assetId && this.assets) await this.assets.delete(att.assetId).catch(() => {}); },
+    async clearAll() {
+      for (const a of data.attachments) await this.delAtt(a);
+      for (const s of STORES) for (const x of data[s]) await this.del(s, x.id);
+    },
+  };
+  let backend = local;
+
+  // Riduce le foto grandi (e converte quelle in formati non accettati) in JPEG.
+  async function shrinkImage(blob, max = 2400) {
+    const bmp = await createImageBitmap(blob);
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = Object.assign(document.createElement('canvas'), { width: Math.round(bmp.width * k), height: Math.round(bmp.height * k) });
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('toBlob'))), 'image/jpeg', 0.85));
+  }
+
+  // Conferma dentro la pagina (le finestre di sistema non sono sempre disponibili).
+  function ask(msg, okLabel = 'Elimina') {
+    const a = $('#ask');
+    a.innerHTML = `<p>${esc(msg)}</p><div class="ask-foot"><button type="button" class="btn" data-v="0">Annulla</button><button type="button" class="btn danger" data-v="1">${esc(okLabel)}</button></div>`;
+    a.returnValue = '';
+    return new Promise((res) => {
+      a.onclick = (e) => { const b = e.target.closest('[data-v]'); if (b) a.close(b.dataset.v); };
+      a.onclose = () => res(a.returnValue === '1');
+      a.showModal();
+    });
+  }
+
   // ---------- Stato ----------
   const saved = JSON.parse(localStorage.getItem('agenda-ui') || '{}');
   const state = {
@@ -80,16 +181,13 @@
   const saveUI = () => localStorage.setItem('agenda-ui', JSON.stringify({ tab: state.tab, sphere: state.sphere }));
   const inSphere = (x) => state.sphere === 'all' || x.sphere === state.sphere;
 
-  async function loadAll() {
-    for (const s of STORES) data[s] = await dbAll(s);
-  }
   async function save(store, obj) {
-    await dbPut(store, obj);
+    await backend.put(store, obj);
     const i = data[store].findIndex((x) => x.id === obj.id);
     if (i >= 0) data[store][i] = obj; else data[store].push(obj);
   }
   async function remove(store, id) {
-    await dbDel(store, id);
+    await backend.del(store, id);
     data[store] = data[store].filter((x) => x.id !== id);
   }
 
@@ -125,8 +223,15 @@
   // ---------- Allegati ----------
   const urls = new Map();
   function urlFor(att) {
+    if (att.assetId) return '/_blob/' + att.assetId;
     if (!urls.has(att.id)) urls.set(att.id, URL.createObjectURL(att.blob));
     return urls.get(att.id);
+  }
+  const blobOf = async (att) => att.blob || (await fetch(urlFor(att))).blob();
+  async function removeAtt(att) {
+    await remove('attachments', att.id);
+    await backend.delAtt(att);
+    dropUrl(att.id);
   }
   function dropUrl(id) { if (urls.has(id)) { URL.revokeObjectURL(urls.get(id)); urls.delete(id); } }
   const kindOf = (type = '') => (type.startsWith('image/') ? 'image' : type.startsWith('video/') ? 'video' : type.startsWith('audio/') ? 'audio' : 'file');
@@ -152,17 +257,20 @@
     });
   }
 
-  async function openViewer({ name, type, blob, url }) {
+  let viewing = null;
+  async function openViewer(item) {
+    const { name, type, url } = item;
+    viewing = item;
     const v = $('#viewer');
     const k = kindOf(type);
     let stage;
     if (k === 'image') stage = `<img src="${esc(url)}" alt="${esc(name)}">`;
     else if (k === 'video') stage = `<video src="${esc(url)}" controls autoplay playsinline></video>`;
     else if (k === 'audio') stage = `<audio src="${esc(url)}" controls autoplay></audio>`;
-    else if ((type || '').startsWith('text/') || /\.(txt|md|csv|json)$/i.test(name)) stage = `<pre>${esc((await blob.text()).slice(0, 200000))}</pre>`;
-    else stage = `<div class="nofile">${FILE_ICON}<p>${esc(name)}</p><p class="small">${fmtSize(blob.size)} — usa “Scarica” per aprirlo.</p></div>`;
+    else if ((type || '').startsWith('text/') || /\.(txt|md|csv|json)$/i.test(name)) stage = `<pre>${esc((await (await item.getBlob()).text()).slice(0, 200000))}</pre>`;
+    else stage = `<div class="nofile">${FILE_ICON}<p>${esc(name)}</p><p class="small">Usa “Scarica” per aprirlo.</p></div>`;
     v.innerHTML = `<div class="bar"><span class="name">${esc(name)}</span>
-      <a class="btn sm" href="${esc(url)}" download="${esc(name)}">Scarica</a>
+      ${backend.cloud ? (backend.downloads ? '<button type="button" class="btn sm" data-act="dl-att">Scarica</button>' : '') : `<a class="btn sm" href="${esc(url)}" download="${esc(name)}">Scarica</a>`}
       <button type="button" class="icon-btn" data-act="close-viewer" aria-label="Chiudi">✕</button></div>
       <div class="stage">${stage}</div>`;
     v.showModal();
@@ -179,7 +287,7 @@
     const fab = $('#fab');
     fab.hidden = state.tab === 'altro';
     fab.setAttribute('aria-label', state.tab === 'budget' ? 'Aggiungi movimento' : 'Aggiungi appuntamento');
-    view.innerHTML = { agenda: viewAgenda, diario: viewDiario, budget: viewBudget, altro: viewAltro }[state.tab]();
+    view.innerHTML = (notice ? `<p class="notice">${esc(notice)}</p>` : '') + { agenda: viewAgenda, diario: viewDiario, budget: viewBudget, altro: viewAltro }[state.tab]();
     hydrate(view);
     if (state.tab === 'altro') storageInfo();
   }
@@ -323,15 +431,17 @@
 
   function viewAltro() {
     return `<section class="card"><div class="card-head"><h2>Dove sono i miei dati</h2></div>
-        <p>Appuntamenti, budget e allegati sono salvati <b>solo su questo dispositivo</b>, dentro il browser. Nessun server, nessun account.</p>
+        ${backend.cloud
+    ? '<p>Appuntamenti, budget e allegati sono salvati <b>nel tuo account Claude</b>, in uno spazio privato che vedi solo tu. Li ritrovi uguali su telefono e computer.</p>'
+    : '<p>Appuntamenti, budget e allegati sono salvati <b>solo su questo dispositivo</b>, dentro il browser. Nessun server, nessun account.</p>'}
         <p class="muted small" style="margin-top:8px" id="storage">Calcolo dello spazio usato…</p></section>
       <section class="card"><div class="card-head"><h2>Copia di sicurezza</h2></div>
-        <p class="muted" style="margin-bottom:12px">Scarica un file con tutti i dati per conservarli o portarli su un altro dispositivo. Fallo ogni tanto: se cancelli i dati del browser, l'agenda si svuota.</p>
+        <p class="muted" style="margin-bottom:12px">${backend.cloud ? 'Scarica un file con tutti i dati, da conservare per sicurezza.' : 'Scarica un file con tutti i dati per conservarli o portarli su un altro dispositivo. Fallo ogni tanto: se cancelli i dati del browser, l\'agenda si svuota.'}</p>
         <label class="inline"><input type="checkbox" id="withAtt" checked>Includi gli allegati (file più grande)</label>
         <div style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="btn primary" data-act="export">Scarica copia</button>
         <label class="btn">Ripristina da file<input type="file" id="importFile" accept="application/json,.json" hidden></label></div></section>
       <section class="card"><div class="card-head"><h2>Cancella tutto</h2></div>
-        <p class="muted" style="margin-bottom:12px">Elimina definitivamente appuntamenti, diario, budget e allegati da questo dispositivo.</p>
+        <p class="muted" style="margin-bottom:12px">Elimina definitivamente appuntamenti, diario, budget e allegati.</p>
         <button type="button" class="btn danger" data-act="wipe">Cancella tutti i dati</button></section>`;
   }
   async function storageInfo() {
@@ -339,9 +449,13 @@
     const attBytes = data.attachments.reduce((s, a) => s + (a.size || 0), 0);
     let txt = `${data.events.length} appuntamenti · ${data.attachments.length} allegati (${fmtSize(attBytes)})`;
     try {
-      const est = await navigator.storage.estimate();
-      if (est.quota) txt += ` · spazio disponibile nel browser: circa ${fmtSize(est.quota - (est.usage || 0))}`;
-      if (await navigator.storage.persisted?.()) txt += ' · archiviazione protetta';
+      if (backend.cloud) {
+        const u = (await backend.assets?.list())?.usage;
+        if (u?.maxBytes) txt += ` · spazio per gli allegati: ${fmtSize(u.bytes)} usati su ${fmtSize(u.maxBytes)}`;
+      } else {
+        const est = await navigator.storage.estimate();
+        if (est.quota) txt += ` · spazio disponibile nel browser: circa ${fmtSize(est.quota - (est.usage || 0))}`;
+      }
     } catch { /* non disponibile */ }
     if ($('#storage')) $('#storage').textContent = txt;
   }
@@ -404,7 +518,7 @@
       <span class="legend">Allegati</span>
       <div class="gallery" id="attList" style="margin-top:0">${attListHTML(atts)}</div>
       <label class="btn" style="margin-top:10px">+ Foto, video o file<input type="file" id="attInput" multiple hidden></label>
-      <p class="small muted" style="margin-top:6px">Dal telefono puoi anche scattare una foto o girare un video al momento.</p>
+      <p class="small muted" style="margin-top:6px">${backend.cloud ? 'Foto, video (fino a 20 MB l\'uno), PDF e file di testo.' : 'Dal telefono puoi anche scattare una foto o girare un video al momento.'}</p>
       </div>${formFoot(!!id, 'del-event', id)}</form>`);
   }
   const attListHTML = (atts) => atts.map((a) => tile(a, { removable: true })).join('') + draft.add.map((p, i) => tile(p, { removable: true, pendingIdx: i })).join('');
@@ -475,11 +589,17 @@
         createdAt: old?.createdAt || Date.now(), updatedAt: Date.now() };
       const d = draft;
       await save('events', ev);
-      for (const aid of d.remove) { await remove('attachments', aid); dropUrl(aid); }
-      for (const p of d.add) {
-        await save('attachments', { id: uid(), eventId: id, name: p.name, type: p.type, size: p.blob.size, blob: p.blob, createdAt: Date.now() });
-      }
+      form.dataset.id = id; d.id = id; // se un allegato non passa, riprovando non si crea un doppione
       state.sel = ev.date; state.month = ev.date.slice(0, 7);
+      for (const aid of [...d.remove]) { const a = data.attachments.find((x) => x.id === aid); if (a) await removeAtt(a); d.remove.delete(aid); }
+      while (d.add.length) {
+        const p = d.add[0];
+        if (d.add.length > 1 || p.blob.size > 1e6) toast(`Carico “${p.name}”…`);
+        try {
+          await save('attachments', await backend.putAtt({ id: uid(), eventId: id, name: p.name, type: p.type, size: p.blob.size, createdAt: Date.now() }, p.blob));
+        } catch (err) { refreshAttList(); render(); throw err; }
+        URL.revokeObjectURL(d.add.shift().url);
+      }
       toast('Appuntamento salvato');
       return true;
     },
@@ -522,14 +642,21 @@
       if (await submit[form.dataset.form](form, new FormData(form))) { closeDlg(); render(); }
     } catch (err) {
       console.error(err);
-      toast(err?.name === 'QuotaExceededError' ? 'Spazio esaurito sul dispositivo: allegato troppo grande' : 'Salvataggio non riuscito');
+      toast(err instanceof UserError ? err.message : err?.name === 'QuotaExceededError' ? 'Spazio esaurito sul dispositivo: allegato troppo grande'
+        : err?.code === 'quota_exceeded' ? 'Spazio esaurito: elimina qualcosa e riprova' : 'Salvataggio non riuscito. Riprova.');
     } finally { delete form.dataset.busy; }
   });
 
   // ---------- Azioni ----------
   async function deleteEvent(id) {
-    for (const a of attsOf(id)) { await remove('attachments', a.id); dropUrl(a.id); }
+    for (const a of attsOf(id)) await removeAtt(a);
     await remove('events', id);
+  }
+
+  async function wipeAll() {
+    await backend.clearAll();
+    [...urls.keys()].forEach(dropUrl);
+    STORES.forEach((s) => { data[s] = []; });
   }
 
   const actions = {
@@ -539,28 +666,32 @@
     'new-event': () => eventForm(null, state.tab === 'agenda' ? state.sel : today()),
     'open-event': (el) => showEvent(el.dataset.id, el.dataset.date),
     'edit-event': (el) => eventForm(el.dataset.id),
-    'del-event': async (el) => { if (!confirm('Eliminare questo appuntamento con le sue note e i suoi allegati?')) return; await deleteEvent(el.dataset.id); closeDlg(); render(); toast('Appuntamento eliminato'); },
+    'del-event': async (el) => { if (!(await ask('Eliminare questo appuntamento con le sue note e i suoi allegati?'))) return; await deleteEvent(el.dataset.id); closeDlg(); render(); toast('Appuntamento eliminato'); },
     'toggle-allday': (el) => { $('#times').hidden = el.checked; return 'keep'; },
-    'view-att': (el) => { const a = data.attachments.find((x) => x.id === el.dataset.id); if (a) openViewer({ name: a.name, type: a.type, blob: a.blob, url: urlFor(a) }); },
-    'view-pending': (el) => { const p = draft?.add[el.dataset.idx]; if (p) openViewer(p); },
+    'view-att': (el) => { const a = data.attachments.find((x) => x.id === el.dataset.id); if (a) openViewer({ name: a.name, type: a.type, url: urlFor(a), getBlob: () => blobOf(a) }); },
+    'dl-att': async () => {
+      if (!viewing) return;
+      try { await backend.downloads.save({ filename: viewing.name, data: await viewing.getBlob() }); } catch (e) { if (e?.code !== 'declined') toast('Download non riuscito'); }
+    },
+    'view-pending': (el) => { const p = draft?.add[el.dataset.idx]; if (p) openViewer({ ...p, getBlob: async () => p.blob }); },
     'rm-att': (el) => { draft.remove.add(el.dataset.id); refreshAttList(); },
     'rm-pending': (el) => { const [p] = draft.add.splice(Number(el.dataset.idx), 1); URL.revokeObjectURL(p.url); refreshAttList(); },
-    'close-viewer': () => { const v = $('#viewer'); v.close(); v.innerHTML = ''; },
+    'close-viewer': () => $('#viewer').close(),
     'close-dlg': () => closeDlg(),
     'diary-all': (el) => { state.diaryAll = el.checked; render(); return 'keep'; },
     'new-fixed': (el) => fixedForm(null, el.dataset.kind),
     'edit-fixed': (el) => fixedForm(el.dataset.id),
-    'del-fixed': async (el) => { if (!confirm('Eliminare questa voce da tutti i mesi?')) return; const id = el.dataset.id; await remove('fixed', id); for (const p of data.paid.filter((x) => x.id.startsWith(id + '|'))) await remove('paid', p.id); closeDlg(); render(); },
+    'del-fixed': async (el) => { if (!(await ask('Eliminare questa voce da tutti i mesi?'))) return; const id = el.dataset.id; await remove('fixed', id); for (const p of data.paid.filter((x) => x.id.startsWith(id + '|'))) await remove('paid', p.id); closeDlg(); render(); },
     'toggle-paid': async (el) => { const id = `${el.dataset.id}|${el.dataset.ym}`; if (el.checked) await save('paid', { id }); else await remove('paid', id); render(); return 'keep'; },
     'new-tx': () => txForm(),
     'edit-tx': (el) => txForm(el.dataset.id),
-    'del-tx': async (el) => { if (!confirm('Eliminare questo movimento?')) return; await remove('tx', el.dataset.id); closeDlg(); render(); },
+    'del-tx': async (el) => { if (!(await ask('Eliminare questo movimento?'))) return; await remove('tx', el.dataset.id); closeDlg(); render(); },
     'edit-budget': (el) => budgetForm(el.dataset.id),
     export: () => exportData(),
     wipe: async () => {
-      if (!confirm('Cancellare davvero TUTTI i dati? L\'operazione non si può annullare.')) return;
-      await tx(STORES, 'readwrite', (t) => STORES.forEach((s) => t.objectStore(s).clear()));
-      [...urls.keys()].forEach(dropUrl); await loadAll(); render(); toast('Dati cancellati');
+      if (!(await ask('Cancellare davvero TUTTI i dati? L\'operazione non si può annullare.', 'Cancella tutto'))) return;
+      toast('Cancello…');
+      await wipeAll(); render(); toast('Dati cancellati');
     },
   };
 
@@ -580,11 +711,14 @@
   document.addEventListener('keydown', (e) => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.tile[role=button], article.entry')) { e.preventDefault(); e.target.click(); }
   });
-  $('#viewer').addEventListener('close', () => { $('#viewer').innerHTML = ''; });
+  $('#viewer').addEventListener('close', () => { $('#viewer').innerHTML = ''; viewing = null; });
 
   document.addEventListener('change', (e) => {
     if (e.target.id === 'attInput' && draft) {
-      for (const f of e.target.files) draft.add.push({ name: f.name || 'allegato', type: f.type, blob: f, url: URL.createObjectURL(f) });
+      for (const f of e.target.files) {
+        const problem = backend.check(f);
+        if (problem) toast(problem); else draft.add.push({ name: f.name || 'allegato', type: f.type, blob: f, url: URL.createObjectURL(f) });
+      }
       e.target.value = '';
       refreshAttList();
     }
@@ -593,14 +727,30 @@
   document.addEventListener('input', (e) => {
     if (e.target.id !== 'q') return;
     state.q = e.target.value;
+    updateEntries();
+  });
+  function updateEntries() {
     const tmp = document.createElement('div');
     tmp.innerHTML = viewDiario();
-    $('#entries').replaceWith(tmp.querySelector('#entries'));
+    $('#entries')?.replaceWith(tmp.querySelector('#entries'));
     hydrate(view);
-  });
+  }
+  // Dati cambiati da un altro dispositivo: aggiorna senza disturbare chi sta scrivendo.
+  let refreshTimer;
+  function refresh() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => (document.activeElement?.id === 'q' ? updateEntries() : render()), 80);
+  }
 
   // ---------- Copia di sicurezza ----------
   const blobToDataURL = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+
+  function dataURLToBlob(url) {
+    const [head, b64] = url.split(',');
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: /data:([^;]*)/.exec(head)?.[1] || '' });
+  }
 
   async function exportData() {
     toast('Preparo la copia…');
@@ -611,15 +761,22 @@
       let first = true;
       for (const a of data.attachments) {
         const { blob, ...meta } = a;
-        parts.push((first ? '' : ',') + JSON.stringify({ ...meta, data: await blobToDataURL(blob) }));
+        delete meta.assetId;
+        parts.push((first ? '' : ',') + JSON.stringify({ ...meta, data: await blobToDataURL(blob || await blobOf(a)) }));
         first = false;
       }
     }
     parts.push(']}');
-    const url = URL.createObjectURL(new Blob(parts, { type: 'application/json' }));
-    const a = Object.assign(document.createElement('a'), { href: url, download: `agenda-diario-${today()}.json` });
-    document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const file = new Blob(parts, { type: 'application/json' }), filename = `agenda-diario-${today()}.json`;
+    if (backend.cloud) {
+      if (!backend.downloads) return toast('Il download non è disponibile qui');
+      try { await backend.downloads.save({ filename, data: file }); } catch (e) { return toast(e?.code === 'declined' ? 'Download annullato' : 'Download non riuscito'); }
+    } else {
+      const url = URL.createObjectURL(file);
+      const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
     toast('Copia scaricata');
   }
 
@@ -627,31 +784,45 @@
     let d;
     try { d = JSON.parse(await file.text()); } catch { return toast('File non valido'); }
     if (d?.app !== 'agenda-diario' || !Array.isArray(d.events)) return toast('Questo file non è una copia di Agenda & Diario');
-    if (!confirm(`Ripristinare la copia del ${new Date(d.exportedAt).toLocaleDateString('it-IT')}? I dati attuali verranno sostituiti.`)) return;
+    if (!(await ask(`Ripristinare la copia del ${new Date(d.exportedAt).toLocaleDateString('it-IT')}? I dati attuali verranno sostituiti.`, 'Ripristina'))) return;
+    toast('Ripristino in corso…');
     try {
-      const atts = [];
+      await wipeAll();
+      for (const s of ['events', 'fixed', 'tx', 'budgets', 'paid']) for (const x of d[s] || []) await save(s, x);
       for (const a of d.attachments || []) {
         const { data: url, ...meta } = a;
-        atts.push({ ...meta, blob: await (await fetch(url)).blob() });
+        await save('attachments', await backend.putAtt(meta, dataURLToBlob(url)));
       }
-      const sets = { events: d.events, fixed: d.fixed || [], tx: d.tx || [], budgets: d.budgets || [], paid: d.paid || [], attachments: atts };
-      await tx(STORES, 'readwrite', (t) => STORES.forEach((s) => { const os = t.objectStore(s); os.clear(); sets[s].forEach((x) => os.put(x)); }));
-      [...urls.keys()].forEach(dropUrl);
-      await loadAll(); render(); toast('Dati ripristinati');
-    } catch (err) { console.error(err); toast('Ripristino non riuscito'); }
+      render(); toast('Dati ripristinati');
+    } catch (err) { console.error(err); render(); toast(err instanceof UserError ? err.message : 'Ripristino non riuscito'); }
   }
 
   // ---------- Avvio ----------
+  let notice = '';
   (async () => {
-    try {
-      await loadAll();
-    } catch (err) {
-      console.error(err);
-      view.innerHTML = '<p class="empty">Impossibile aprire l\'archivio locale. Se stai usando la navigazione privata, riapri l\'app in una finestra normale.</p>';
-      return;
+    const inClaude = typeof window.claude?.use === 'function';
+    view.innerHTML = '<p class="empty">Carico i tuoi dati…</p>';
+    if (inClaude) {
+      const slow = setTimeout(() => { view.innerHTML = '<p class="empty">I dati non sono ancora raggiungibili: continuo a provare…</p>'; }, 10000);
+      try {
+        if (await cloud.init(refresh)) backend = cloud;
+      } catch (err) { console.error(err); }
+      clearTimeout(slow);
+      if (backend !== cloud) notice = 'Non riesco a collegarmi al tuo account Claude: per ora quello che scrivi resta solo in questo browser. Ricarica la pagina per riprovare.';
+    }
+    if (backend === local) {
+      try {
+        await local.init();
+      } catch (err) {
+        console.error(err);
+        view.innerHTML = '<p class="empty">Impossibile aprire l\'archivio. Ricarica la pagina; se stai usando la navigazione privata, riaprila in una finestra normale.</p>';
+        return;
+      }
     }
     render();
-    navigator.storage?.persist?.().catch(() => {});
-    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if (!inClaude) {
+      navigator.storage?.persist?.().catch(() => {});
+      if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
   })();
 })();

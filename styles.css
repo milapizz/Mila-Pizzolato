@@ -302,3 +302,8 @@ dialog::backdrop { background: rgba(10, 12, 16, .5); }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+.ask { width: min(380px, calc(100% - 32px)); background: var(--surface); border-radius: 18px; padding: 20px; }
+.ask p { font-weight: 600; }
+.ask-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.notice { background: var(--money-soft); color: var(--money); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: .9rem; margin-bottom: 12px; }

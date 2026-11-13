@@ -12,16 +12,20 @@ Un'agenda personale che tiene separati gli appuntamenti di **lavoro** e di **fam
 
 ## Dove stanno i dati
 
-Tutto è salvato **solo sul dispositivo**, nel browser (IndexedDB). Non c'è server né account: i dati non si sincronizzano tra telefono e computer, e cancellando i dati del browser si perdono. Usare *Altro → Scarica copia* per conservarli o spostarli.
+L'app funziona in due modi, con lo stesso codice:
 
-## Come si usa
+- **Aperta da Claude** (pagina pubblicata come artifact): i dati sono salvati nell'account di chi la usa, in uno spazio privato, e sono gli stessi su telefono e computer. Gli allegati possono essere foto, video, PDF e file di testo, fino a 20 MB l'uno; le foto grandi vengono ridotte automaticamente.
+- **Aperta come semplice sito** (in locale o su GitHub Pages): i dati restano solo nel browser del dispositivo (IndexedDB), senza sincronizzazione; qualsiasi tipo di file può essere allegato.
+
+In entrambi i casi *Altro → Scarica copia* salva tutto in un file.
+
+## Come si usa come sito
 
 È un sito statico, senza installazione né build.
 
 - **In locale:** `python3 -m http.server 8000` nella cartella, poi aprire <http://localhost:8000>.
 - **Online con GitHub Pages:** *Settings → Pages → Deploy from a branch*, scegliere il ramo e la cartella `/ (root)`.
-- **Sul telefono:** aprire l'indirizzo e scegliere *Aggiungi a schermata Home*; da lì funziona come un'app, anche offline.
 
 ## Test
 
-`node tests/smoke.mjs` (richiede Playwright) apre l'app in un browser e ne verifica i flussi principali.
+`node tests/smoke.mjs` (richiede Playwright) apre l'app in un browser e ne verifica i flussi principali, con l'archivio nel browser e con quello dell'account Claude (simulato).
