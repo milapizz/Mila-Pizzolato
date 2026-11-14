@@ -848,7 +848,12 @@
   let refreshTimer;
   function refresh() {
     clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(() => (document.activeElement?.id === 'q' ? updateEntries() : render()), 80);
+    refreshTimer = setTimeout(() => {
+      const el = document.activeElement;
+      if (el?.id === 'q') updateEntries();
+      else if (view.contains(el) && el.matches('input:not([type=checkbox]), textarea, select')) refresh(); // sta scrivendo: riprovo dopo
+      else render();
+    }, 400);
   }
 
   // ---------- Copia di sicurezza ----------
