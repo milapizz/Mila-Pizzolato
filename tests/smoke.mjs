@@ -174,6 +174,35 @@ async function run(browser, mode) {
   await page.click('[data-act=nav-bmonth][data-d="-1"]'); // la spesa fissa non c'è nel mese precedente
   assert.equal(norm(await stat('Spese fisse')), '0,00 €');
 
+  // --- Soldi da parte: salvadanaio con obiettivo, versamenti e prelievi
+  await page.click('[data-act=nav-bmonth][data-d="0"]');
+  await page.click('[data-act=new-saving]');
+  await page.fill('[name=name]', 'Viaggio');
+  await page.fill('[name=initial]', '200');
+  await page.fill('[name=target]', '1000');
+  await page.click('button[type=submit]');
+  await page.click('[data-act=open-saving]');
+  await page.fill('[name=amount]', '50,50');
+  await page.fill('[name=note]', 'Regalo dei nonni');
+  await page.click('#dlg button[type=submit]');
+  await page.waitForSelector('#dlg .t:text("Regalo dei nonni")');
+  await page.check('[name=dir][value="-1"]');
+  await page.fill('[name=amount]', '20');
+  await page.click('#dlg button[type=submit]');
+  await page.waitForFunction(() => document.querySelectorAll('#dlg .list li').length === 3);
+  assert.equal(norm(await page.locator('#dlg .saved-total').innerText()), '230,50 €');
+  assert.ok((await page.locator('#dlg .sheet-body').innerText()).replace(/\s/g, ' ').includes('Mancano 769,50 €'));
+  await page.click('[data-act=close-dlg]');
+  assert.ok(norm(await page.locator('main .saved-total').innerText()).startsWith('230,50 €'));
+  await shot('risparmi-mobile');
+
+  // --- Nomi degli ambiti personalizzabili
+  await page.click('[data-tab=altro]');
+  await page.fill('form[data-form=labels] [name=lavoro]', 'Ufficio');
+  await page.click('form[data-form=labels] button[type=submit]');
+  await page.click('[data-tab=agenda]');
+  await page.waitForSelector('#sphere [data-sphere=lavoro]:text("Ufficio")');
+
   // --- I dati restano dopo il ricaricamento
   await page.reload();
   await page.click('[data-tab=agenda]');
@@ -195,6 +224,7 @@ async function run(browser, mode) {
   }
   const dump = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.equal(dump.events.length, 2);
+  assert.equal(dump.savings[0].moves.length, 3);
   assert.equal(dump.attachments.length, 1);
   assert.ok(dump.attachments[0].data.startsWith('data:image/png;base64,'));
   await page.click('[data-act=wipe]');
@@ -211,6 +241,8 @@ async function run(browser, mode) {
   await page.waitForFunction(() => document.querySelector('.entry .tile img')?.naturalWidth === 1);
   await page.click('[data-tab=budget]');
   assert.equal(norm(await stat('Disponibile')), '1.205,20 €');
+  assert.ok(norm(await page.locator('main .saved-total').innerText()).startsWith('230,50 €'), 'risparmi ripristinati');
+  await page.waitForSelector('#sphere [data-sphere=lavoro]:text("Ufficio")');
 
   // --- Eliminazione con conferma
   await page.click('[data-tab=agenda]');
@@ -224,6 +256,28 @@ async function run(browser, mode) {
     await page.setViewportSize({ width: 1280, height: 860 });
     for (const t of ['agenda', 'budget', 'altro']) { await page.click(`[data-tab=${t}]`); await page.screenshot({ path: path.join(shots, `${t}-desktop-${mode}.png`) }); }
   }
+  // --- Versione per chi studia: altri nomi, dati separati
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(URL_ + 'studente.html');
+  await page.waitForSelector('.cal');
+  assert.equal(await page.locator('#sphere [data-sphere=lavoro]').innerText(), 'Scuola');
+  assert.equal(await page.locator('#sphere [data-sphere=famiglia]').innerText(), 'Vita privata');
+  assert.equal(await page.locator('.item .t').count(), 0, 'dati separati dalla versione standard');
+  await page.click('#fab');
+  await page.fill('[name=title]', 'Verifica di matematica');
+  await page.check('[name=sphere][value=lavoro]');
+  await page.click('button[type=submit]');
+  await page.waitForSelector('.item .t:text("Verifica di matematica")');
+  await page.click('[data-tab=budget]');
+  await page.click('#fab');
+  assert.ok((await page.locator('[name=category]').innerText()).includes('Scuola e libri'));
+  await page.click('[data-act=close-dlg]');
+  await shot('studente-mobile');
+  await page.goto(URL_);
+  await page.click('[data-tab=agenda]');
+  await page.waitForSelector('.item .t:text("Riunione cliente")');
+  assert.equal(await page.locator('.item .t:text("Verifica di matematica")').count(), 0);
+
   assert.deepEqual(errors, [], 'nessun errore in console');
   await ctx.close();
   console.log(`OK (${cloud ? 'account Claude simulato' : 'archivio nel browser'})`);

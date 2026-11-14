@@ -10,6 +10,13 @@ Un'agenda personale che tiene separati gli appuntamenti di **lavoro** e di **fam
 - **Budget** – per ogni mese: entrate, spese fisse (con scadenza e spunta "pagata"), spese variabili, limiti per categoria e quanto resta disponibile. Le scadenze compaiono anche nel calendario.
 - **Copia di sicurezza** – esportazione e ripristino di tutti i dati in un file (sezione *Altro*).
 
+## Due versioni
+
+- `index.html` – versione standard: ambiti **Lavoro** e **Famiglia**.
+- `studente.html` – versione per chi studia: ambiti **Scuola** e **Vita privata**, categorie di spesa adatte, dati separati dall'altra.
+
+In entrambe i nomi dei due ambiti si possono cambiare da *Altro*, e nel Budget c'è la sezione **Soldi da parte**: salvadanai con saldo, obiettivo facoltativo e storico di versamenti e prelievi.
+
 ## Dove stanno i dati
 
 L'app funziona in due modi, con lo stesso codice:

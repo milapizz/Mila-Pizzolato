@@ -5,12 +5,30 @@
   'use strict';
 
   // ---------- Costanti ----------
-  const SPHERES = { lavoro: 'Lavoro', famiglia: 'Famiglia' };
-  const CATEGORIES = ['Casa', 'Bollette', 'Spesa alimentare', 'Trasporti', 'Salute', 'Figli e scuola',
-    'Tempo libero', 'Abbonamenti', 'Assicurazioni', 'Tasse', 'Lavoro', 'Altro'];
+  // Due versioni della stessa app: quella standard (lavoro / famiglia) e quella per chi studia (scuola / vita privata).
+  const STUDENT = window.AGENDA_PRESET === 'studente';
+  const PRESET = STUDENT ? {
+    key: 'agenda-diario-studente',
+    labels: { lavoro: 'Scuola', famiglia: 'Vita privata' },
+    categories: ['Cibo e uscite', 'Vestiti', 'Scuola e libri', 'Trasporti', 'Telefono', 'Regali', 'Tempo libero', 'Sport', 'Abbonamenti', 'Altro'],
+    fixedCat: 'Abbonamenti', txCat: 'Cibo e uscite',
+    exTitle: 'Es. Verifica di matematica', exFixed: 'Es. Abbonamento musica', exIncome: 'Es. Paghetta', exTx: 'Es. Pizza con le amiche',
+    emptyFixed: 'Abbonamenti, ricarica del telefono, palestra… aggiungile una volta e le ritrovi ogni mese.',
+    emptyIncome: 'Paghetta, lavoretti, ripetizioni…',
+  } : {
+    key: 'agenda-diario',
+    labels: { lavoro: 'Lavoro', famiglia: 'Famiglia' },
+    categories: ['Casa', 'Bollette', 'Spesa alimentare', 'Trasporti', 'Salute', 'Figli e scuola', 'Tempo libero', 'Abbonamenti', 'Assicurazioni', 'Tasse', 'Lavoro', 'Altro'],
+    fixedCat: 'Casa', txCat: 'Spesa alimentare',
+    exTitle: 'Es. Riunione con il cliente', exFixed: 'Es. Affitto', exIncome: 'Es. Stipendio', exTx: 'Es. Supermercato',
+    emptyFixed: 'Affitto, mutuo, bollette, abbonamenti… aggiungile una volta e le ritrovi ogni mese.',
+    emptyIncome: 'Stipendio, compensi fissi, affitti percepiti…',
+  };
+  let SPHERES = { ...PRESET.labels }; // i nomi si possono cambiare da Altro
+  const CATEGORIES = PRESET.categories;
   const REPEATS = { none: 'Non si ripete', daily: 'Ogni giorno', weekly: 'Ogni settimana', monthly: 'Ogni mese', yearly: 'Ogni anno' };
   const EVERY = { 1: 'Ogni mese', 2: 'Ogni 2 mesi', 3: 'Ogni 3 mesi', 6: 'Ogni 6 mesi', 12: 'Ogni anno' };
-  const STORES = ['events', 'attachments', 'fixed', 'tx', 'budgets', 'paid'];
+  const STORES = ['events', 'attachments', 'fixed', 'tx', 'budgets', 'paid', 'savings', 'settings'];
   const TITLES = { agenda: 'Agenda', diario: 'Diario', budget: 'Budget', altro: 'Altro' };
 
   // ---------- Utilità ----------
@@ -50,7 +68,7 @@
   let dbp;
   function openDB() {
     dbp = dbp || new Promise((res, rej) => {
-      const rq = indexedDB.open('agenda-diario', 1);
+      const rq = indexedDB.open(PRESET.key, 2);
       rq.onupgradeneeded = () => STORES.forEach((s) => rq.result.objectStoreNames.contains(s) || rq.result.createObjectStore(s, { keyPath: 'id' }));
       rq.onsuccess = () => res(rq.result);
       rq.onerror = () => rej(rq.error);
@@ -99,7 +117,7 @@
       const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
       const uid = db && user ? await user.id() : null;
       if (!uid) return false;
-      this.base = db.doc(`data/users/${uid}/agenda`);
+      this.base = db.doc(`data/users/${uid}/${STUDENT ? 'agenda-studente' : 'agenda'}`);
       window.claude.use('assets').then((a) => { this.assets = a; });
       window.claude.use('downloads').then((d) => { this.downloads = d; });
       await new Promise((res, rej) => {
@@ -167,7 +185,7 @@
   }
 
   // ---------- Stato ----------
-  const saved = JSON.parse(localStorage.getItem('agenda-ui') || '{}');
+  const saved = JSON.parse(localStorage.getItem(PRESET.key + '-ui') || '{}');
   const state = {
     tab: TITLES[saved.tab] ? saved.tab : 'agenda',
     sphere: saved.sphere || 'all',
@@ -177,8 +195,8 @@
     q: '',
     diaryAll: false,
   };
-  const data = { events: [], attachments: [], fixed: [], tx: [], budgets: [], paid: [] };
-  const saveUI = () => localStorage.setItem('agenda-ui', JSON.stringify({ tab: state.tab, sphere: state.sphere }));
+  const data = Object.fromEntries(STORES.map((s) => [s, []]));
+  const saveUI = () => localStorage.setItem(PRESET.key + '-ui', JSON.stringify({ tab: state.tab, sphere: state.sphere }));
   const inSphere = (x) => state.sphere === 'all' || x.sphere === state.sphere;
 
   async function save(store, obj) {
@@ -281,7 +299,9 @@
 
   function render() {
     document.querySelectorAll('#tabs [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.tab));
-    document.querySelectorAll('#sphere [data-sphere]').forEach((b) => { const on = b.dataset.sphere === state.sphere; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    const custom = data.settings.find((x) => x.id === 'main')?.labels || {};
+    SPHERES = { lavoro: custom.lavoro || PRESET.labels.lavoro, famiglia: custom.famiglia || PRESET.labels.famiglia };
+    document.querySelectorAll('#sphere [data-sphere]').forEach((b) => { if (SPHERES[b.dataset.sphere]) b.lastChild.textContent = SPHERES[b.dataset.sphere]; const on = b.dataset.sphere === state.sphere; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
     $('#title').textContent = TITLES[state.tab];
     $('#sphere').hidden = state.tab === 'altro';
     const fab = $('#fab');
@@ -373,7 +393,7 @@
       const atts = attsOf(e.id);
       html += `<article class="card entry" data-act="open-event" data-id="${esc(e.id)}" data-date="${e.date}">
         <div class="entry-head"><div class="entry-date"><b>${Number(e.date.slice(8))}</b><span>${esc(fmtDate(e.date, { weekday: 'short' }))}</span></div>
-        <div><h3>${esc(e.title)}</h3><span class="tag ${e.sphere}">${SPHERES[e.sphere]}</span>${e.place ? ` <span class="small muted">${esc(e.place)}</span>` : ''}</div></div>
+        <div><h3>${esc(e.title)}</h3><span class="tag ${e.sphere}">${esc(SPHERES[e.sphere])}</span>${e.place ? ` <span class="small muted">${esc(e.place)}</span>` : ''}</div></div>
         ${e.notes ? `<p class="note clamp">${esc(e.notes)}</p>` : ''}
         ${atts.length ? `<div class="gallery">${atts.map((a) => tile(a)).join('')}</div>` : ''}</article>`;
     }
@@ -416,11 +436,12 @@
         <div class="stat"><div class="k">Spese variabili</div><div class="v">${eur(varTot)}</div></div>
         <div class="stat"><div class="k">Disponibile</div><div class="v ${left < 0 ? 'neg' : 'pos'}">${eur(left)}</div><div class="h">entrate − spese</div></div>
       </div>
+      ${savingsCard()}
       <div class="budget-grid">
         <section class="card"><div class="card-head"><h2>Spese fisse</h2><button type="button" class="btn sm" data-act="new-fixed" data-kind="uscita">+ Aggiungi</button></div>
-          ${fOut.length ? `<ul class="list">${fOut.map((f) => dueItem(f, ym)).join('')}</ul>` : '<p class="empty">Affitto, mutuo, bollette, abbonamenti… aggiungile una volta e le ritrovi ogni mese.</p>'}</section>
+          ${fOut.length ? `<ul class="list">${fOut.map((f) => dueItem(f, ym)).join('')}</ul>` : `<p class="empty">${PRESET.emptyFixed}</p>`}</section>
         <section class="card"><div class="card-head"><h2>Entrate ricorrenti</h2><button type="button" class="btn sm" data-act="new-fixed" data-kind="entrata">+ Aggiungi</button></div>
-          ${fIn.length ? `<ul class="list">${fIn.map((f) => dueItem(f, ym)).join('')}</ul>` : '<p class="empty">Stipendio, compensi fissi, affitti percepiti…</p>'}</section>
+          ${fIn.length ? `<ul class="list">${fIn.map((f) => dueItem(f, ym)).join('')}</ul>` : `<p class="empty">${PRESET.emptyIncome}</p>`}</section>
         <section class="card"><div class="card-head"><h2>Budget per categoria</h2><button type="button" class="btn sm" data-act="edit-budget">+ Limite</button></div>
           ${meters || '<p class="empty">Imposta un limite mensile per categoria e controlla quanto ti resta.</p>'}
           <p class="small muted" style="margin-top:8px">Calcolato sulle spese variabili del mese.</p></section>
@@ -429,12 +450,31 @@
       </div>`;
   }
 
+  const balance = (g) => (g.moves || []).reduce((s, m) => s + m.amount, 0);
+  function savingsCard() {
+    const goals = [...data.savings].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    const rows = goals.map((g) => {
+      const bal = balance(g), pct = g.target ? Math.max(0, Math.min(100, (bal / g.target) * 100)) : 0;
+      return `<button type="button" class="meter" data-act="open-saving" data-id="${esc(g.id)}">
+        <span class="row"><span>${esc(g.name)}</span><span>${eur(bal)}${g.target ? ` di ${eur(g.target)}` : ''}</span></span>
+        ${g.target ? `<span class="track" style="display:block"><span class="fill" style="display:block;width:${pct}%"></span></span>` : ''}</button>`;
+    }).join('');
+    return `<section class="card" style="margin-bottom:14px"><div class="card-head"><h2>Soldi da parte</h2><button type="button" class="btn sm" data-act="new-saving">+ Salvadanaio</button></div>
+      ${goals.length ? `<p class="saved-total">${eur(goals.reduce((s, g) => s + balance(g), 0))}<span class="small muted"> in totale</span></p>${rows}`
+    : '<p class="empty">Tieni il conto dei tuoi risparmi: crea un salvadanaio, segna quanto metti e quanto togli, e se vuoi dagli un obiettivo.</p>'}</section>`;
+  }
+
   function viewAltro() {
     return `<section class="card"><div class="card-head"><h2>Dove sono i miei dati</h2></div>
         ${backend.cloud
     ? '<p>Appuntamenti, budget e allegati sono salvati <b>nel tuo account Claude</b>, in uno spazio privato che vedi solo tu. Li ritrovi uguali su telefono e computer.</p>'
     : '<p>Appuntamenti, budget e allegati sono salvati <b>solo su questo dispositivo</b>, dentro il browser. Nessun server, nessun account.</p>'}
         <p class="muted small" style="margin-top:8px" id="storage">Calcolo dello spazio usato…</p></section>
+      <section class="card"><div class="card-head"><h2>Nomi dei due ambiti</h2></div>
+        <form data-form="labels" novalidate><div class="row2">
+          <label class="field"><span><i class="dot lavoro"></i> Primo</span><input name="lavoro" maxlength="16" value="${esc(SPHERES.lavoro)}" autocomplete="off"></label>
+          <label class="field"><span><i class="dot famiglia"></i> Secondo</span><input name="famiglia" maxlength="16" value="${esc(SPHERES.famiglia)}" autocomplete="off"></label></div>
+          <button type="submit" class="btn">Salva i nomi</button></form></section>
       <section class="card"><div class="card-head"><h2>Copia di sicurezza</h2></div>
         <p class="muted" style="margin-bottom:12px">${backend.cloud ? 'Scarica un file con tutti i dati, da conservare per sicurezza.' : 'Scarica un file con tutti i dati per conservarli o portarli su un altro dispositivo. Fallo ogni tanto: se cancelli i dati del browser, l\'agenda si svuota.'}</p>
         <label class="inline"><input type="checkbox" id="withAtt" checked>Includi gli allegati (file più grande)</label>
@@ -478,7 +518,7 @@
   dlg.addEventListener('click', (e) => { if (e.target === dlg && !dlg.querySelector('form')) closeDlg(); });
 
   const sphereChoice = (val) => `<span class="legend">Ambito</span><div class="choice">
-    ${Object.entries(SPHERES).map(([k, l]) => `<label><input type="radio" name="sphere" value="${k}" ${val === k ? 'checked' : ''}><span class="${k}"><i class="dot ${k}"></i>${l}</span></label>`).join('')}</div>`;
+    ${Object.entries(SPHERES).map(([k, l]) => `<label><input type="radio" name="sphere" value="${k}" ${val === k ? 'checked' : ''}><span class="${k}"><i class="dot ${k}"></i>${esc(l)}</span></label>`).join('')}</div>`;
   const options = (map, val) => Object.entries(map).map(([k, l]) => `<option value="${esc(k)}" ${String(val) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('');
   const catOptions = (val) => CATEGORIES.map((c) => `<option ${c === val ? 'selected' : ''}>${esc(c)}</option>`).join('');
   const defSphere = () => (state.sphere === 'all' ? 'famiglia' : state.sphere);
@@ -490,7 +530,7 @@
     const atts = attsOf(e.id);
     const when = e.allDay ? 'Tutto il giorno' : [e.start, e.end].filter(Boolean).join(' – ');
     sheet(esc(e.title), `<div class="sheet-body">
-      <span class="tag ${e.sphere}"><i class="dot ${e.sphere}"></i>${SPHERES[e.sphere]}</span>
+      <span class="tag ${e.sphere}"><i class="dot ${e.sphere}"></i>${esc(SPHERES[e.sphere])}</span>
       <div class="detail-meta"><span style="text-transform:capitalize">${esc(longDate(ds || e.date))}${when ? ` · ${esc(when)}` : ''}</span>
         ${e.repeat && e.repeat !== 'none' ? `<span>${esc(REPEATS[e.repeat])}${e.until ? ` fino al ${esc(fmtDate(e.until, { day: 'numeric', month: 'long', year: 'numeric' }))}` : ''}</span>` : ''}
         ${e.place ? `<span>${esc(e.place)}</span>` : ''}</div>
@@ -505,7 +545,7 @@
     draft = draft && draft.id === (id || null) ? draft : { id: id || null, add: [], remove: new Set() };
     const atts = id ? attsOf(id).filter((a) => !draft.remove.has(a.id)) : [];
     sheet(id ? 'Modifica appuntamento' : 'Nuovo appuntamento', `<form data-form="event" data-id="${esc(id || '')}" novalidate><div class="sheet-body">
-      <label class="field"><span>Titolo</span><input name="title" required maxlength="120" value="${esc(e.title)}" placeholder="Es. Riunione con il cliente" autocomplete="off"></label>
+      <label class="field"><span>Titolo</span><input name="title" required maxlength="120" value="${esc(e.title)}" placeholder="${PRESET.exTitle}" autocomplete="off"></label>
       ${sphereChoice(e.sphere)}
       <label class="field"><span>Data</span><input type="date" name="date" required value="${esc(e.date)}"></label>
       <label class="inline"><input type="checkbox" name="allDay" ${e.allDay ? 'checked' : ''} data-act="toggle-allday">Tutto il giorno</label>
@@ -529,10 +569,10 @@
   }
 
   function fixedForm(id, kind) {
-    const f = data.fixed.find((x) => x.id === id) || { kind: kind || 'uscita', name: '', amount: '', category: 'Casa', sphere: defSphere(), every: 1, start: state.bmonth + '-01', end: '' };
+    const f = data.fixed.find((x) => x.id === id) || { kind: kind || 'uscita', name: '', amount: '', category: PRESET.fixedCat, sphere: defSphere(), every: 1, start: state.bmonth + '-01', end: '' };
     const out = f.kind === 'uscita';
     sheet(`${id ? 'Modifica' : 'Nuova'} ${out ? 'spesa fissa' : 'entrata ricorrente'}`, `<form data-form="fixed" data-id="${esc(id || '')}" data-kind="${f.kind}" novalidate><div class="sheet-body">
-      <label class="field"><span>Nome</span><input name="name" required maxlength="80" value="${esc(f.name)}" placeholder="${out ? 'Es. Affitto' : 'Es. Stipendio'}" autocomplete="off"></label>
+      <label class="field"><span>Nome</span><input name="name" required maxlength="80" value="${esc(f.name)}" placeholder="${out ? PRESET.exFixed : PRESET.exIncome}" autocomplete="off"></label>
       <label class="field"><span>Importo (€)</span><input name="amount" required inputmode="decimal" value="${f.amount === '' ? '' : String(f.amount).replace('.', ',')}" placeholder="0,00" autocomplete="off"></label>
       ${out ? `<label class="field"><span>Categoria</span><select name="category">${catOptions(f.category)}</select></label>` : ''}
       ${sphereChoice(f.sphere)}
@@ -544,12 +584,12 @@
 
   function txForm(id) {
     const d = state.bmonth === today().slice(0, 7) ? today() : state.bmonth + '-01';
-    const t = data.tx.find((x) => x.id === id) || { kind: 'uscita', name: '', amount: '', category: 'Spesa alimentare', sphere: defSphere(), date: d };
+    const t = data.tx.find((x) => x.id === id) || { kind: 'uscita', name: '', amount: '', category: PRESET.txCat, sphere: defSphere(), date: d };
     sheet(id ? 'Modifica movimento' : 'Nuovo movimento', `<form data-form="tx" data-id="${esc(id || '')}" novalidate><div class="sheet-body">
       <span class="legend">Tipo</span><div class="choice">
         <label><input type="radio" name="kind" value="uscita" ${t.kind === 'uscita' ? 'checked' : ''}><span>Spesa</span></label>
         <label><input type="radio" name="kind" value="entrata" ${t.kind === 'entrata' ? 'checked' : ''}><span>Entrata</span></label></div>
-      <label class="field"><span>Descrizione</span><input name="name" required maxlength="80" value="${esc(t.name)}" placeholder="Es. Supermercato" autocomplete="off"></label>
+      <label class="field"><span>Descrizione</span><input name="name" required maxlength="80" value="${esc(t.name)}" placeholder="${PRESET.exTx}" autocomplete="off"></label>
       <div class="row2"><label class="field"><span>Importo (€)</span><input name="amount" required inputmode="decimal" value="${t.amount === '' ? '' : String(t.amount).replace('.', ',')}" placeholder="0,00" autocomplete="off"></label>
         <label class="field"><span>Data</span><input type="date" name="date" required value="${esc(t.date)}"></label></div>
       <label class="field"><span>Categoria (per le spese)</span><select name="category">${catOptions(t.category)}</select></label>
@@ -557,10 +597,42 @@
       </div>${formFoot(!!id, 'del-tx', id)}</form>`);
   }
 
+  function savingForm(id) {
+    const g = data.savings.find((x) => x.id === id) || { name: '', target: '' };
+    sheet(id ? 'Modifica salvadanaio' : 'Nuovo salvadanaio', `<form data-form="saving" data-id="${esc(id || '')}" novalidate><div class="sheet-body">
+      <label class="field"><span>Nome</span><input name="name" required maxlength="60" value="${esc(g.name)}" placeholder="Es. Viaggio, motorino, libretto…" autocomplete="off"></label>
+      ${id ? '' : '<label class="field"><span>Quanto c\'è già (€)</span><input name="initial" inputmode="decimal" placeholder="0,00" autocomplete="off"></label>'}
+      <label class="field"><span>Obiettivo (€, facoltativo)</span><input name="target" inputmode="decimal" value="${g.target ? String(g.target).replace('.', ',') : ''}" placeholder="0,00" autocomplete="off"></label>
+      </div>${formFoot(!!id, 'del-saving', id)}</form>`);
+  }
+  function showSaving(id) {
+    const g = data.savings.find((x) => x.id === id); if (!g) return;
+    const bal = balance(g), moves = [...(g.moves || [])].sort((a, b) => b.date.localeCompare(a.date) || b.at - a.at);
+    const left = g.target ? g.target - bal : 0;
+    sheet(esc(g.name), `<div class="sheet-body">
+      <p class="saved-total">${eur(bal)}</p>
+      ${g.target ? `<p class="muted" style="margin-bottom:6px">${left > 0 ? `Mancano ${eur(left)} per arrivare a ${eur(g.target)}` : `Obiettivo di ${eur(g.target)} raggiunto`}</p>
+        <div class="meter" style="padding:0 0 14px"><span class="track" style="display:block"><span class="fill" style="display:block;width:${Math.max(0, Math.min(100, (bal / g.target) * 100))}%"></span></span></div>` : ''}
+      <form data-form="saving-move" data-id="${esc(g.id)}" novalidate>
+        <div class="choice"><label><input type="radio" name="dir" value="1" checked><span>Metto da parte</span></label>
+          <label><input type="radio" name="dir" value="-1"><span>Tolgo</span></label></div>
+        <div class="row2"><label class="field"><span>Importo (€)</span><input name="amount" inputmode="decimal" placeholder="0,00" autocomplete="off"></label>
+          <label class="field"><span>Data</span><input type="date" name="date" value="${today()}"></label></div>
+        <label class="field"><span>Nota (facoltativa)</span><input name="note" maxlength="80" placeholder="Es. Regalo dei nonni" autocomplete="off"></label>
+        <button type="submit" class="btn primary" style="width:100%">Registra</button></form>
+      <span class="legend" style="margin-top:18px">Movimenti</span>
+      ${moves.length ? `<ul class="list">${moves.map((m) => `<li><div class="item"><span class="when">${Number(m.date.slice(8))} ${esc(fmtDate(m.date, { month: 'short' }))}</span>
+        <span class="body"><span class="t">${esc(m.note || (m.amount >= 0 ? 'Messi da parte' : 'Tolti'))}</span></span>
+        <span class="amt ${m.amount >= 0 ? 'in' : ''}">${m.amount >= 0 ? '+' : '−'}${eur(Math.abs(m.amount))}</span>
+        <button type="button" class="icon-btn" style="width:30px;height:30px" data-act="del-saving-move" data-id="${esc(g.id)}" data-move="${esc(m.id)}" aria-label="Elimina movimento">✕</button></div></li>`).join('')}</ul>` : '<p class="empty">Ancora nessun movimento.</p>'}
+      </div><div class="sheet-foot"><button type="button" class="btn danger" data-act="del-saving" data-id="${esc(g.id)}">Elimina</button><span class="grow"></span>
+      <button type="button" class="btn" data-act="edit-saving" data-id="${esc(g.id)}">Modifica</button></div>`);
+  }
+
   function budgetForm(cat) {
     const b = data.budgets.find((x) => x.id === cat);
     sheet('Limite mensile', `<form data-form="budget" novalidate><div class="sheet-body">
-      <label class="field"><span>Categoria</span><select name="category">${catOptions(cat || 'Spesa alimentare')}</select></label>
+      <label class="field"><span>Categoria</span><select name="category">${catOptions(cat || PRESET.txCat)}</select></label>
       <label class="field"><span>Limite al mese (€)</span><input name="limit" inputmode="decimal" value="${b ? String(b.limit).replace('.', ',') : ''}" placeholder="0,00" autocomplete="off"></label>
       <p class="small muted">Lascia vuoto o metti 0 per togliere il limite.</p>
       </div>${formFoot(false)}</form>`);
@@ -574,6 +646,34 @@
   }
 
   const submit = {
+    async saving(form, fd) {
+      const name = fd.get('name').trim();
+      if (!name) return fail(form, 'name', 'Scrivi un nome');
+      const target = fd.get('target').trim() ? parseAmount(fd.get('target')) : 0;
+      if (Number.isNaN(target) || target < 0) return fail(form, 'target', 'Inserisci un importo valido');
+      const initial = (fd.get('initial') || '').trim() ? parseAmount(fd.get('initial')) : 0;
+      if (Number.isNaN(initial) || initial < 0) return fail(form, 'initial', 'Inserisci un importo valido');
+      const old = data.savings.find((x) => x.id === form.dataset.id);
+      await save('savings', { id: old?.id || uid(), name, target, createdAt: old?.createdAt || Date.now(),
+        moves: old ? old.moves || [] : initial > 0 ? [{ id: uid(), date: today(), amount: initial, note: 'Saldo iniziale', at: Date.now() }] : [] });
+      return true;
+    },
+    async 'saving-move'(form, fd) {
+      const g = data.savings.find((x) => x.id === form.dataset.id), amount = parseAmount(fd.get('amount'));
+      if (!g) return true;
+      if (!(amount > 0)) return fail(form, 'amount', 'Inserisci un importo valido');
+      if (!fd.get('date')) return fail(form, 'date', 'Scegli una data');
+      await save('savings', { ...g, moves: [...(g.moves || []), { id: uid(), date: fd.get('date'), amount: amount * Number(fd.get('dir')), note: fd.get('note').trim(), at: Date.now() }] });
+      render(); showSaving(g.id); toast('Registrato');
+      return false;
+    },
+    async labels(form, fd) {
+      const lavoro = fd.get('lavoro').trim(), famiglia = fd.get('famiglia').trim();
+      if (!lavoro || !famiglia) return fail(form, lavoro ? 'famiglia' : 'lavoro', 'Scrivi un nome');
+      await save('settings', { id: 'main', labels: { lavoro, famiglia } });
+      render(); toast('Nomi salvati');
+      return false;
+    },
     async event(form, fd) {
       const title = fd.get('title').trim();
       if (!title) return fail(form, 'title', 'Scrivi un titolo');
@@ -687,6 +787,15 @@
     'edit-tx': (el) => txForm(el.dataset.id),
     'del-tx': async (el) => { if (!(await ask('Eliminare questo movimento?'))) return; await remove('tx', el.dataset.id); closeDlg(); render(); },
     'edit-budget': (el) => budgetForm(el.dataset.id),
+    'new-saving': () => savingForm(),
+    'open-saving': (el) => showSaving(el.dataset.id),
+    'edit-saving': (el) => savingForm(el.dataset.id),
+    'del-saving': async (el) => { if (!(await ask('Eliminare questo salvadanaio e tutti i suoi movimenti?'))) return; await remove('savings', el.dataset.id); closeDlg(); render(); },
+    'del-saving-move': async (el) => {
+      const g = data.savings.find((x) => x.id === el.dataset.id); if (!g) return;
+      await save('savings', { ...g, moves: g.moves.filter((m) => m.id !== el.dataset.move) });
+      render(); showSaving(g.id);
+    },
     export: () => exportData(),
     wipe: async () => {
       if (!(await ask('Cancellare davvero TUTTI i dati? L\'operazione non si può annullare.', 'Cancella tutto'))) return;
@@ -756,7 +865,7 @@
     toast('Preparo la copia…');
     const withAtt = $('#withAtt')?.checked;
     const parts = [JSON.stringify({ app: 'agenda-diario', version: 1, exportedAt: new Date().toISOString(),
-      events: data.events, fixed: data.fixed, tx: data.tx, budgets: data.budgets, paid: data.paid }).slice(0, -1), ',"attachments":['];
+      events: data.events, fixed: data.fixed, tx: data.tx, budgets: data.budgets, paid: data.paid, savings: data.savings, settings: data.settings }).slice(0, -1), ',"attachments":['];
     if (withAtt) {
       let first = true;
       for (const a of data.attachments) {
@@ -788,7 +897,7 @@
     toast('Ripristino in corso…');
     try {
       await wipeAll();
-      for (const s of ['events', 'fixed', 'tx', 'budgets', 'paid']) for (const x of d[s] || []) await save(s, x);
+      for (const s of ['events', 'fixed', 'tx', 'budgets', 'paid', 'savings', 'settings']) for (const x of d[s] || []) await save(s, x);
       for (const a of d.attachments || []) {
         const { data: url, ...meta } = a;
         await save('attachments', await backend.putAtt(meta, dataURLToBlob(url)));

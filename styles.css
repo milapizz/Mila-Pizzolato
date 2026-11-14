@@ -307,3 +307,5 @@ dialog::backdrop { background: rgba(10, 12, 16, .5); }
 .ask p { font-weight: 600; }
 .ask-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .notice { background: var(--money-soft); color: var(--money); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: .9rem; margin-bottom: 12px; }
+.saved-total { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+.field > span .dot { margin-right: 4px; }
