@@ -36,3 +36,7 @@ In entrambi i casi *Altro → Scarica copia* salva tutto in un file.
 ## Test
 
 `node tests/smoke.mjs` (richiede Playwright) apre l'app in un browser e ne verifica i flussi principali, con l'archivio nel browser e con quello dell'account Claude (simulato).
+
+## Statistiche vendite Zoho (`zoho/`)
+
+Pagina separata, pensata per essere pubblicata come artifact di Claude: legge Zoho CRM (e la posta inviata di Gmail) con i connettori di chi la apre e mostra la lista delle chiamate del giorno con scheda cliente e link a Zoho, più le statistiche su lead, esiti delle chiamate, demo, contratti e medie giornaliere di chiamate e mail. Non contiene dati: senza i connettori di Claude non mostra nulla. Prova con connettori simulati: `node tests/zoho.mjs`.

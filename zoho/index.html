@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statistiche vendite Zoho</title>
+<link rel="stylesheet" href="zoho.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <h1>Statistiche vendite</h1>
+    <button type="button" class="btn sm" id="refresh">Aggiorna</button>
+  </div>
+  <div class="top-row controls">
+    <div class="seg" id="view" role="group" aria-label="Sezione">
+      <button type="button" data-view="oggi">Chiamate del giorno</button>
+      <button type="button" data-view="stat">Statistiche</button>
+    </div>
+    <div class="seg" id="scope" role="group" aria-label="Di chi">
+      <button type="button" data-scope="me">Le mie</button>
+      <button type="button" data-scope="team">Tutto il team</button>
+    </div>
+    <div class="seg" id="period" role="group" aria-label="Periodo">
+      <button type="button" data-days="7">7 giorni</button>
+      <button type="button" data-days="30">30 giorni</button>
+      <button type="button" data-days="90">90 giorni</button>
+    </div>
+  </div>
+  <p class="muted small" id="fresh"></p>
+</header>
+<main id="app"><p class="empty">Mi collego a Zoho…</p></main>
+<div id="tip" class="tip" hidden></div>
+<script src="zoho.js"></script>
+</body>
+</html>
