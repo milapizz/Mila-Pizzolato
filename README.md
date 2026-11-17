@@ -1,3 +1,5 @@
+> **Inizia da qui:** [GUIDA.md](GUIDA.md) – come lavorare con Claude in 5 parole. Profilo e regole in [CLAUDE.md](CLAUDE.md), routine in `.claude/skills/`.
+
 # Agenda & Diario
 
 Un'agenda personale che tiene separati gli appuntamenti di **lavoro** e di **famiglia**, aiuta a pianificare **budget e spese fisse** e diventa un **diario**: a ogni evento si possono allegare foto, video, file e note.
