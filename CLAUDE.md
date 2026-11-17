@@ -25,10 +25,19 @@ Leggi questo file all'inizio di ogni sessione. Rispondi sempre in **italiano**, 
 2. **chiamata** – dopo una telefonata: aggiorna Zoho e prepara l'email di follow-up.
 3. **preventivo** – usa la skill `preventivatore-aida`.
 4. **linkedin** – un post nella mia voce, pronto in Taplio come bozza.
-5. **settimana** – venerdì: numeri della settimana e piano della prossima.
+5. **settimana** – i numeri della settimana su richiesta (il venerdì alle 18:37 il report arriva già da solo in Notion).
+
+## Automazioni già attive (non duplicarle)
+- Mattina (lun–ven): risposte alle mail demo 5:52 · Brief del mattino in Notion 5:53 · Piano chiamate 6:07 · Schede demo 6:23 · Buongiorno 7:45.
+- Sera: foglio "mila aida" da Zoho 18:45 · demo del giorno nel database Attività di Notion 20:43 · chiusura serale 20:53 · email con l'anteprima di domani 21:30 (dalla domenica al giovedì).
+- Venerdì 18:37: report settimanale in Notion ("📊 Report settimanali").
+- Notion: database Lead `collection://98f5528c-49cd-4bc7-b35d-b8683441ba97`, Attività `collection://f6ad5e49-99d5-431a-9b2c-6eef10c751d9`.
+- Utente Zoho di Mila (Owner): `809746000003843001`.
 
 ## Regole
-- **Zoho è la fonte di verità.** Non creare liste di lead in documenti separati: leggi da Zoho, scrivi su Zoho.
+- **Prima di scrivere qualsiasi cosa su Zoho chiedi sempre conferma** (regola di Mila del 09/11: "Io poi devo rendere conto di questa cosa").
+- **I follow-up dei preventivi li gestisce Mila**: non proporre solleciti.
+- **Zoho è la fonte di verità** su chiamate, fasi e importi. Non creare liste di lead in documenti nuovi.
 - **Non creare un documento nuovo ogni giorno.** Il piano del giorno lo scrivi in chat; un documento solo se lo chiedo.
 - **Niente invii automatici**: email, post e messaggi restano in bozza finché non dico "manda".
 - **Mai inventare** numeri, nomi, prezzi o dati cliente: se mancano, chiedili.
