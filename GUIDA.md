@@ -7,11 +7,11 @@ Adesso: **Claude sa già chi sei** (`CLAUDE.md`), **i dati stanno in Zoho**, e t
 ## Le 5 parole
 | Dici | Quando | Cosa ottieni |
 |---|---|---|
-| **buongiorno** | ogni mattina | agenda, chi chiamare (max 8, da Zoho), email da rispondere, 3 priorità |
+| *(arriva da sola)* | 7:45, lun–ven | **un'unica email** con tutta la giornata: priorità, agenda, demo, chiamate, risposte alle mail demo, ieri, trattative, email |
 | **chiamata** + due righe | dopo ogni telefonata | Zoho aggiornato, prossimo passo fissato, email di follow-up in bozza |
 | **preventivo** + nome struttura | quando lo chiedono | il .docx AiDA compilato dal template |
 | **linkedin** | 1–2 volte a settimana | post nella tua voce, salvato in bozza su Taplio |
-| **settimana** | il venerdì | numeri della settimana vs la precedente + piano della prossima |
+| *(arriva da sola)* | venerdì 18:37 | report della settimana via email, da girare al responsabile |
 
 Esempi:
 - `chiamata: Hotel Ai Reali, parlato col GM, demo giovedì 11:00`

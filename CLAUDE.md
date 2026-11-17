@@ -29,10 +29,10 @@ Leggi questo file all'inizio di ogni sessione. Rispondi sempre in **italiano**, 
 
 ## Automazioni già attive (non duplicarle)
 - **Mila non usa Notion**: non leggere né scrivere su Notion, non proporlo.
-- Mattina (lun–ven): **Buongiorno 7:45 = unico piano del giorno** (chiamate dalla scheda "Piano chiamate" del foglio "mila aida" + richiami Zoho) · risposte alle mail demo 5:52 (scrive solo se un hotel ha risposto).
-- Sera: foglio "mila aida" da Zoho 18:45 · email con l'anteprima di domani 21:30 (dalla domenica al giovedì).
-- Venerdì 18:37: report settimanale via email a Mila.
-- Spente il 17/11: Brief del mattino e Demo del giorno in Notion.
+- **Una sola email al giorno**: "☀️ Oggi" alle 7:45 (lun–ven) a mila@aimsolutions.it con priorità, agenda, demo, chiamate (dal foglio "mila aida" + richiami Zoho), risposte alle mail demo, com'è andata ieri, trattative, email da rispondere. Se Mila chiede di aggiornare Zoho per una demo accettata, proponi le modifiche e falle solo dopo il suo OK.
+- Venerdì 18:37: report settimanale via email.
+- In silenzio: foglio "mila aida" aggiornato da Zoho alle 18:45; controlli commenti LinkedIn della campagna Venezia (fino al 10/12).
+- Spente il 17/11: Brief del mattino, Demo del giorno in Notion, email serale delle 21:30, notifica delle 5:52 sulle risposte alle mail demo (ora dentro l'email del mattino).
 - Utente Zoho di Mila (Owner): `809746000003843001`.
 
 ## Regole
