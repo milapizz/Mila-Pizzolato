@@ -28,10 +28,11 @@ Leggi questo file all'inizio di ogni sessione. Rispondi sempre in **italiano**, 
 5. **settimana** – i numeri della settimana su richiesta (il venerdì alle 18:37 il report arriva già da solo in Notion).
 
 ## Automazioni già attive (non duplicarle)
-- Mattina (lun–ven): risposte alle mail demo 5:52 (scrive solo se qualcuno ha risposto) · **Buongiorno 7:45 = unico piano del giorno** (chiamate prese dalla scheda "Piano chiamate" del foglio "mila aida"). Il Brief in Notion è spento dal 17/11.
-- Sera: foglio "mila aida" da Zoho 18:45 · demo del giorno nel database Attività di Notion 20:43 · chiusura serale 20:53 · email con l'anteprima di domani 21:30 (dalla domenica al giovedì).
-- Venerdì 18:37: report settimanale in Notion ("📊 Report settimanali").
-- Notion: database Lead `collection://98f5528c-49cd-4bc7-b35d-b8683441ba97`, Attività `collection://f6ad5e49-99d5-431a-9b2c-6eef10c751d9`.
+- **Mila non usa Notion**: non leggere né scrivere su Notion, non proporlo.
+- Mattina (lun–ven): **Buongiorno 7:45 = unico piano del giorno** (chiamate dalla scheda "Piano chiamate" del foglio "mila aida" + richiami Zoho) · risposte alle mail demo 5:52 (scrive solo se un hotel ha risposto).
+- Sera: foglio "mila aida" da Zoho 18:45 · email con l'anteprima di domani 21:30 (dalla domenica al giovedì).
+- Venerdì 18:37: report settimanale via email a Mila.
+- Spente il 17/11: Brief del mattino e Demo del giorno in Notion.
 - Utente Zoho di Mila (Owner): `809746000003843001`.
 
 ## Regole
