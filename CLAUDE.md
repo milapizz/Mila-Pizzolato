@@ -25,14 +25,16 @@ Leggi questo file all'inizio di ogni sessione. Rispondi sempre in **italiano**, 
 2. **chiamata** – dopo una telefonata: aggiorna Zoho e prepara l'email di follow-up.
 3. **preventivo** – usa la skill `preventivatore-aida`.
 4. **linkedin** – un post nella mia voce, pronto in Taplio come bozza.
-5. **settimana** – i numeri della settimana su richiesta (il venerdì alle 18:37 il report arriva già da solo in Notion).
+5. **settimana** – i numeri della settimana su richiesta (il venerdì alle 18:37 il report arriva già da solo per email).
 
 ## Automazioni già attive (non duplicarle)
 - **Mila non usa Notion**: non leggere né scrivere su Notion, non proporlo.
-- **Una sola email al giorno**: "☀️ Oggi" alle 7:45 (lun–ven) a mila@aimsolutions.it con priorità, agenda, demo, chiamate (dal foglio "mila aida" + richiami Zoho), risposte alle mail demo, com'è andata ieri, trattative, email da rispondere. Se Mila chiede di aggiornare Zoho per una demo accettata, proponi le modifiche e falle solo dopo il suo OK.
+- **Mattina 7:45 (lun–ven), email "☀️ Oggi"**: priorità, agenda, demo, chiamate (dal foglio "mila aida" + richiami Zoho), risposte alle mail demo, trattative, email arrivate da ieri sera.
+- **Sera 19:07 (lun–ven), email "🌙 La tua giornata"**: telefonate con esiti e note, demo (dai riepiloghi Fathom/Fireflies in Gmail), email, chi risentire, mail da mandare o a cui rispondere, cosa aggiornare su Zoho, cosa poteva fare meglio e un consiglio per domani.
+- Se Mila chiede "aggiorna Zoho", proponi le modifiche e falle solo dopo il suo OK.
 - Venerdì 18:37: report settimanale via email.
 - In silenzio: foglio "mila aida" aggiornato da Zoho alle 18:45; controlli commenti LinkedIn della campagna Venezia (fino al 10/12).
-- Spente il 17/11: Brief del mattino, Demo del giorno in Notion, email serale delle 21:30, notifica delle 5:52 sulle risposte alle mail demo (ora dentro l'email del mattino).
+- Spente il 17/11: Brief del mattino, Demo del giorno in Notion, notifica delle 5:52 sulle risposte alle mail demo (ora dentro l'email del mattino).
 - Utente Zoho di Mila (Owner): `809746000003843001`.
 
 ## Regole
