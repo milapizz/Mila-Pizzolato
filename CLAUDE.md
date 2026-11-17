@@ -28,7 +28,7 @@ Leggi questo file all'inizio di ogni sessione. Rispondi sempre in **italiano**, 
 5. **settimana** – i numeri della settimana su richiesta (il venerdì alle 18:37 il report arriva già da solo in Notion).
 
 ## Automazioni già attive (non duplicarle)
-- Mattina (lun–ven): risposte alle mail demo 5:52 · Brief del mattino in Notion 5:53 · Piano chiamate 6:07 · Schede demo 6:23 · Buongiorno 7:45.
+- Mattina (lun–ven): risposte alle mail demo 5:52 (scrive solo se qualcuno ha risposto) · **Buongiorno 7:45 = unico piano del giorno** (chiamate prese dalla scheda "Piano chiamate" del foglio "mila aida"). Il Brief in Notion è spento dal 17/11.
 - Sera: foglio "mila aida" da Zoho 18:45 · demo del giorno nel database Attività di Notion 20:43 · chiusura serale 20:53 · email con l'anteprima di domani 21:30 (dalla domenica al giovedì).
 - Venerdì 18:37: report settimanale in Notion ("📊 Report settimanali").
 - Notion: database Lead `collection://98f5528c-49cd-4bc7-b35d-b8683441ba97`, Attività `collection://f6ad5e49-99d5-431a-9b2c-6eef10c751d9`.
